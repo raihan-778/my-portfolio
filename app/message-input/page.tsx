@@ -50,6 +50,11 @@ export default function SendMessage() {
     },
   });
 
+  const res = await fetch('/api/suggest-message', {...});
+console.log('Response status:', res.status);
+const text = await res.text();
+console.log('Raw response:', text);
+
 const handleMessageClick=()=>{
   console.log("handleMessageClick")
 }
