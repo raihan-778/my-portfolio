@@ -15,7 +15,7 @@ function Navbar() {
             href={`/message-input
             `}
           >
-            Suggest message{" "}
+            Chat With Your AI Assistant{" "}
           </Link>
         </Button>
       </div>
