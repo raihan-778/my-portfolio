@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     // System prompt based on mode
     const systemContent =
       mode === "summarize"
-        ? "Please summarize the provided text in 300 words or less, capturing the main points, key ideas, and essential information. Ensure the summary is concise, clear, and easy to understand:"
+        ? "Please summarize the provided text in 100 words or less, capturing the main points, key ideas, and essential information. Ensure the summary is concise, clear, and easy to understand:"
         : "You are a helpful AI assistant.";
 
     const response = await client.path("/chat/completions").post({
