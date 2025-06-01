@@ -1,34 +1,48 @@
-import { streamText } from "ai";
-import { fireworks } from "@ai-sdk/fireworks";
-import { StreamingTextResponse } from "ai";
+import ModelClient, { isUnexpected } from "@azure-rest/ai-inference";
+import { AzureKeyCredential } from "@azure/core-auth";
+import { NextResponse } from "next/server";
 
-export const runtime = "edge";
+const token = process.env.LALMA_SUMURISER_CLASSIC_API_KEY;
+const endpoint = "https://models.github.ai/inference";
+const model = "meta/Llama-4-Scout-17B-16E-Instruct";
 
 export async function POST(req: Request) {
   try {
-    const { prompt } = await req.json();
+    const { messages, mode = "chat" } = await req.json();
 
-    const result = await streamText({
-      model: fireworks("accounts/fireworks/models/mixtral-8x7b-instruct"),
-      messages: [
-        {
-          role: "system",
-          content: 'Return exactly 3 questions separated by "||"',
-        },
-        {
-          role: "user",
-          content: prompt || "Generate fun questions about life",
-        },
-      ],
-      temperature: 0.7,
+    const client = ModelClient(endpoint, new AzureKeyCredential(token!));
+
+    // System prompt based on mode
+    const systemContent =
+      mode === "summarize"
+        ? "Provide a concise summary retaining key information:"
+        : "You are a helpful AI assistant.";
+
+    const response = await client.path("/chat/completions").post({
+      body: {
+        messages: [{ role: "system", content: systemContent }, ...messages],
+        temperature: mode === "summarize" ? 0.3 : 0.7, // Lower temp for summaries
+        top_p: 0.1,
+        max_tokens: 2048,
+        model,
+      },
     });
 
-    // Correct modern method - THIS WILL WORK
-    return new StreamingTextResponse(result.toAIStream());
+    console.log("api route clicked");
+
+    if (isUnexpected(response)) {
+      throw new Error(response.body.error?.message || "API request failed");
+    }
+
+    console.log(response.body.choices[0].message.content);
+    return NextResponse.json({
+      content: response.body.choices[0].message.content,
+    });
   } catch (error) {
-    console.error("Error:", error);
-    return new Response(JSON.stringify({ error: "Generation failed" }), {
-      status: 500,
-    });
+    console.log("api route clicked");
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }

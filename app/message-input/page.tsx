@@ -1,148 +1,135 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { zodResolver } from "@hookform/resolvers/zod";
-import axios, { AxiosError } from "axios";
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Send, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
-
-import { useCompletion } from "@ai-sdk/react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { toast } from "sonner";
-import * as z from "zod";
-
-const specialChar = "||";
-
-const parseStringMessages = (messageString: string): string[] => {
-  return messageString.split(specialChar).filter((msg) => msg.trim());
+type Message = {
+  role: "user" | "assistant";
+  content: string;
 };
 
-const initialMessageString =
-  "What's your favorite movie?||Do you have any pets?||What's your dream job?";
+export default function ChatPage() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isSummarizeMode, setIsSummarizeMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-export default function SendMessage() {
-  const [selectedMessage, setSelectedMessage] = useState("");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
 
-  const {
-    complete,
-    completion,
-    isLoading: isSuggestLoading,
-    error,
-  } = useCompletion({
-    api: "/api/suggest-message",
-    initialCompletion: initialMessageString,
-    onFinish: (finalComplition) => {
-      console.log("Final completion:", finalComplition);
-    },
-  });
+    const userMessage: Message = { role: "user", content: input };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
 
-  const res = await fetch('/api/suggest-message', {...});
-console.log('Response status:', res.status);
-const text = await res.text();
-console.log('Raw response:', text);
-
-const handleMessageClick=()=>{
-  console.log("handleMessageClick")
-}
-
-}
-
-
-
-
-
-  const fetchSuggestedMessages = async () => {
     try {
-      await complete("");
-      console.log("suggested messages Complition:", completion);
+      const response = await fetch("/api/suggest-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, userMessage],
+          mode: isSummarizeMode ? "summarize" : "chat",
+        }),
+      });
 
-      // Using append() instead of complete()
+      const { content } = await response.json();
+      setMessages((prev) => [...prev, { role: "assistant", content }]);
     } catch (error) {
-      console.error("Error fetching messages:", error);
-      // Handle error appropriately (e.g., show toast notification)
-      if (error instanceof Error) {
-        toast.error(`Failed to get suggestions: ${error.message}`);
-      }
+      console.error("Error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "⚠️ Failed to get response. Please try again.",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const suggestedMessages = parseStringMessages(completion);
-  console.log("Suggested Messages:", suggestedMessages);
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   return (
-    <div className="container mx-auto my-8 p-6 bg-white rounded max-w-4xl">
-      <h1 className="text-4xl font-bold mb-6 text-center">
-        Public Profile Link
-      </h1>
+    <div className="flex flex-col h-[calc(100vh-64px)] max-w-3xl mx-auto p-4 gap-4">
+      {/* Mode Toggle */}
+      <div className="flex items-center gap-2">
+        <Label htmlFor="mode-toggle">Chat Mode</Label>
+        <Switch
+          id="mode-toggle"
+          checked={isSummarizeMode}
+          onCheckedChange={setIsSummarizeMode}
+        />
+        <Label htmlFor="mode-toggle">Summarize Mode</Label>
+        {isSummarizeMode && <Sparkles className="w-4 h-4 text-yellow-500" />}
+      </div>
 
-
-      <div className="space-y-4 my-8">
-        <div className="space-y-2">
-          <Button
-            onClick={fetchSuggestedMessages}
-            className="my-4"
-            disabled={isSuggestLoading}
-          >
-            {isSuggestLoading ? "Generating..." : "Suggested Messages"}
-          </Button>
-          <p>Click on any message below to select it.</p>
-        </div>
-        <Card>
-          <CardHeader>
-            <h3 className="text-xl font-semibold">Messages</h3>
-          </CardHeader>
-          {suggestedMessages.length > 0 && (
-            <CardContent className="flex flex-col space-y-4">
-              {error ? (
-                <p className="text-red-500">{error.message}</p>
-              ) : (
-                suggestedMessages.map((message, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    className={`p-3 border rounded cursor-pointer ${
-                      selectedMessage === message
-                        ? "bg-blue-50 border-blue-300"
-                        : "hover:bg-gray-50"
-                    }`}
-                    onClick={() => handleMessageClick(message)}
-                  >
-                    {message}
-                  </Button>
-                ))
-              )}
-            </CardContent>
+      {/* Messages Container */}
+      <ScrollArea className="flex-1 rounded-lg border p-4">
+        <div className="space-y-4">
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`flex ${
+                msg.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              <div
+                className={`max-w-[80%] rounded-lg p-3 ${
+                  msg.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted"
+                }`}
+              >
+                <p className="whitespace-pre-wrap">{msg.content}</p>
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-muted rounded-lg p-3 max-w-[80%]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            </div>
           )}
-        </Card>
-      </div>
-      <Separator className="my-6" />
-      <div className="text-center">
-        <div className="mb-4">Get Your Message Board</div>
-        <Link href={"/sign-up"}>
-          <Button>Create Your Account</Button>
-        </Link>
-      </div>
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
 
-      {/* Debug info (remove in production) */}
-      <div className="text-sm text-gray-500">
-        <div>Selected: {selectedMessage}</div>
-        <div>Form value: {form.watch("content")}</div>
-        <div>Completion: {completion}</div>
-      </div>
+      {/* Input Form */}
+      <form
+        onSubmit={handleSubmit}
+        className="flex gap-2 sticky bottom-4 bg-background pt-2"
+      >
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={
+            isSummarizeMode
+              ? "Paste text to summarize..."
+              : "Type your message..."
+          }
+          className="flex-1"
+          disabled={isLoading}
+        />
+        <Button type="submit" size="icon" disabled={!input.trim() || isLoading}>
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      </form>
     </div>
   );
 }
